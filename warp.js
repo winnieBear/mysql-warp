@@ -276,7 +276,54 @@ function update(instance, array, tx, callback) {
         callback(null, instance);
     });
 }
+//update an instance data when compair the current data property is same as before update 
 
+function compairUpdate(instance, array, compair, tx, callback) {
+  var
+  model = instance.__model,
+    beforeUpdate = model.__beforeUpdate,
+    updates,
+    params,
+    compairKeys = [],
+    compairVals = [],
+    sql;
+  if (beforeUpdate) {
+    beforeUpdate(instance);
+  }
+  if (!array) {
+    array = model.__updateAttributesArray;
+  }
+  updates = _.map(array, function (attr) {
+    return '`' + attr + '`=?';
+  });
+  params = _.map(array, function (attr) {
+    return instance[attr];
+  });
+
+  for (var ck in compair) {
+    if (compair.hasOwnProperty(ck)) {
+      compairKeys.push('`' + ck + '`=?');
+      compairVals.push(compair[ck]);
+    }
+  }
+
+
+  params.push(instance[model.__primaryKey]);
+
+  params = params.concat(compairVals);
+
+  sql = utils.format('update `%s` set %s where `%s`=? and %s', model.__table, updates.join(', '), model.__primaryKey, compairKeys.join(' And '));
+  smartRunSQL(model.__pool, sql, params, tx, function (err, result) {
+    if (err) {
+      return callback(err);
+    }
+    //if result.affectedRows == 0,indicate that no rows matched
+    if(result.affectedRows < 1){
+        return callback(new Error('compairUpdate fail:Rows matched is 0!'));
+    }
+    callback(null, instance);
+  });
+}
 // delete an instance by id:
 function destroy(instance, tx, callback) {
     var
@@ -461,6 +508,50 @@ function BaseModel(warpObject) {
         }
         update(this, array, tx, callback);
     };
+  this.compairUpdate = function (array, compair, tx, callback) {
+    if (this.__isModel) {
+      return callback(new Error('Cannot invoke update() on model: ' + this));
+    }
+    if (arguments.length < 2) {
+      return callback(new Error('Update attributes compair is empty.'));
+    }
+    if(arguments.length === 2){
+        callback = compair;
+        compair = array;
+        array = undefined;
+        tx = undefined;
+    }
+
+    if (arguments.length === 3) {
+      if (compair.__isTx) {
+        callback = tx;
+        tx = compair;
+        compair = array;
+        array = undefined;
+      } else {
+        callback = tx;
+        tx = undefined;
+      }
+    }
+    if (!Array.isArray(array) && typeof array === 'object') {
+      // can update { key: value }
+      var
+      that = this,
+        thatModel = this.__model,
+        updates = [];
+      _.each(array, function (v, k) {
+        if (thatModel.__attributes.hasOwnProperty(k)) {
+          that[k] = v;
+          updates.push(k);
+        }
+      });
+      array = updates;
+    }
+    if (array !== undefined && array.length === 0) {
+      return callback(new Error('Update attributes array is empty.'));
+    }
+    compairUpdate(this, array, compair, tx, callback);
+  };
     this.destroy = function (tx, callback) {
         if (this.__isModel) {
             return callback(new Error('Cannot invoke destroy() on model: ' + this));
