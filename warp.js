@@ -497,8 +497,8 @@ function BaseModel(warpObject) {
     };
 }
 
-function createSubModel(baseModel, definitions) {
-    var Sub = function () {
+function createSubModel(baseModel, definitions,extendsObj) {
+    var Sub = function() {
         this.__isModel = true;
         this.__objectId = utils.createObjectId();
 
@@ -533,6 +533,11 @@ function createSubModel(baseModel, definitions) {
             console.log('beforeCreate: ' + this.__beforeCreate);
             console.log('beforeUpdate: ' + this.__beforeUpdate);
         };
+        for(var fun in extendsObj){
+            if(extendsObj.hasOwnProperty(fun)){
+                this[fun] = extendsObj[fun];
+            }
+        }
     };
     Sub.prototype = baseModel;
     Sub.prototype.constructor = Sub;
@@ -571,12 +576,11 @@ function Warp(pool) {
         return new Instance(subModel, attrs);
     };
 
-    this.define = function (name, fieldConfigs, options) {
-        var
-            def = utils.parseModelDefinition(name, fieldConfigs, options),
-            subModel = createSubModel(this.__model, def);
+    this.define = function(name, fieldConfigs, options, extendsObj) {
+        var def = utils.parseModelDefinition(name, fieldConfigs, options);
+        var subModel = createSubModel(this.__model, def, extendsObj);
         subModel.prototype = this.__model;
-        console.log('Model defined: ' + subModel);
+        //console.log('Model defined: ' + subModel);
         return subModel;
     };
 
